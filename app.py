@@ -1,10 +1,9 @@
+from re import sub
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
-import streamlit.components.v1 as components
-import sweetviz as sv
 import time
 import datetime
 
@@ -42,9 +41,26 @@ def preprocess(df_):
     df.index = df.date_mutation
     return df
 
+
 @log
 def get_communs(df):
     return df.nom_commune.value_counts().index
+
+
+@log
+def get_types_local(df):
+    return df.type_local.value_counts().index
+
+
+@log
+@st.cache
+def lowest_square_meters_prices(values):
+    df, limits = values
+    b = df[(df.surface_terrain >= limits[0]) & (df.surface_terrain <= limits[1]) & ~(df["prix/m^2"].isna())]
+    b = b[["nom_commune","prix/m^2"]].groupby("nom_commune").mean().sort_values(by="prix/m^2", ascending=True)[:15]
+    b["nom_commune"] = b.index
+    return b
+
 
 @log
 @st.cache
@@ -80,8 +96,7 @@ def communs_higher_numof_transactions(df):
 @st.cache
 def average_transactionValue_perMonth(df):
     data = df.loc[:,"valeur_fonciere"].resample("M").mean()
-    return pd.DataFrame({"valeurs": data.values, "mois": data.index.month})
-
+    return data
 
 @log
 @st.cache
@@ -107,12 +122,6 @@ def sidebar():
     dataset_year = st.sidebar.selectbox(
         "Choisissez l'année souhaitée",
         ('2020','2019','2018','2017','2016'))
-
-    with st.sidebar.form(key='my_form'):
-        text_input = st.text_input(label='Enter some text')
-        submit_button = st.form_submit_button(label='Submit')
-    
-
     return dataset_year
 
 
@@ -128,7 +137,11 @@ def someUtils():
             'Sorting hat',
             ("Gryffindor", "Ravenclaw", "Hufflepuff", "Slytherin"))
         st.write(f"You are in {chosen} house!")
-
+    
+    values = st.slider(
+    'Select a range of values',
+    0.0, 100.0, (25.0, 75.0))
+    st.write('Values:', values)
 
 def main():
 
@@ -136,7 +149,9 @@ def main():
     df1 = load_data(year)
     df_ = preprocess(df1)
 
-    st.image("https://upload.wikimedia.org/wikipedia/fr/thumb/3/38/Logo_de_la_R%C3%A9publique_fran%C3%A7aise_%281999%29.svg/1200px-Logo_de_la_R%C3%A9publique_fran%C3%A7aise_%281999%29.svg.png")
+    col1, col2 = st.columns(2)
+    col1.image("https://media.lesechos.com/api/v1/images/view/5d1473758fe56f63c2439d98/1280x720/2202973-immobilier-faut-il-acheter-aujourdhui-web-tete-0302190155223.jpg")
+    col2.image("https://upload.wikimedia.org/wikipedia/fr/thumb/3/38/Logo_de_la_R%C3%A9publique_fran%C3%A7aise_%281999%29.svg/1200px-Logo_de_la_R%C3%A9publique_fran%C3%A7aise_%281999%29.svg.png")
     st_space(3)
 
     st.markdown("# Transactions immobilières en France sur les 5 dernières années")
@@ -160,9 +175,10 @@ def main():
     st.subheader("Valeur moyenne des transactions par mois")
     data = average_transactionValue_perMonth(df_)
     fig, ax= plt.subplots(figsize=(10,6))
-    ax = sns.barplot(data=data, x="mois", y="valeurs")
+    #ax = sns.barplot(data=data, x="mois", y="valeurs")
     ax.set_xticklabels('Jan Fev Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split())
     ax.set_xticks(np.arange(12))
+    ax = plt.plot(np.arange(12), data, color="lime")
     st.pyplot(fig)
 
 
@@ -196,9 +212,20 @@ def main():
     st.pyplot(fig)
 
 
-    # Les communes avec les prix moyens au mètre carré les plus élevés
-
-
+    # Les communes avec les prix moyens au mètre carré les plus bas (en fonction du type de logement de la superficie)
+    st_space(3)
+    st.subheader("Les communes avec les prix moyens au mètre carré les plus bas (en fonction du type de logement et de la superficie)")
+    col1, col2 = st.columns(2)
+    location = col1.selectbox("Choissisez un type de logement", tuple(get_types_local(df_)))
+    subdf = df_[df_.type_local == location]
+    limits = (subdf.surface_terrain.min(), subdf.surface_terrain.max())
+    limits = col2.slider('Sélectionnez un intervalle de valeurs',limits[0],limits[1], (20.0, 10000.0))
+    data = lowest_square_meters_prices((subdf, limits))
+    fig, ax = plt.subplots(figsize=(10,6))
+    ax = sns.barplot(data=data, x="nom_commune", y="prix/m^2")
+    ax.set_xticklabels(ax.get_xticklabels(),rotation = 50)
+    st.pyplot(fig)
+    #someUtils()
 
 if __name__ == "__main__":
     main()
