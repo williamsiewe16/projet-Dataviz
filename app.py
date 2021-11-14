@@ -9,11 +9,11 @@ import datetime
 
 def log(function):
     def modified_function(df):
-        time_ = time.time()
+        timestamp = time.time()
         res = function(df)
-        time_ = time.time()-time_
+        time_ = time.time()-timestamp
         with open("log.txt","a") as f:
-            f.write(f"{function.__name__}: execution time = {time_} s     call timestamp = {time_} s\n")
+            f.write(f"{function.__name__}: execution time = {round(time_,3)} s     call timestamp = {round(timestamp,3)} s\n")
         return res
     return modified_function
 
